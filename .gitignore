@@ -1,0 +1,11 @@
+# Cloned / extracted projects for analysis
+.cache/
+
+# Generated analysis reports (runtime output)
+reports/
+
+# Logs
+*.log
+
+# Claude Code local state
+.claude/
