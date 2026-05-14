@@ -1,11 +1,11 @@
 ---
 name: project-analyzer
-description: Analyze a software project and produce a structured markdown report covering its problem domain, license/distribution, design philosophy, modules breakdown, and strengths/weaknesses. Accepts a GitHub repo name (searches and clones), a local directory path, an uploaded archive (.zip/.tar.gz/.tar), or a submodule form `<repo-or-path>::<subpath>` for drilling into one subdirectory. Use this skill whenever the user wants to understand, explore, study, or summarize an existing project, codebase, or repository — even without the word "analyze." Strong trigger phrases include "了解这个项目", "看一下这个仓库", "整理一份项目报告", "分析 X repo", "study this repo", "understand this codebase", or simply naming a project and asking for a writeup. Goes beyond surface summary by checking README claims against actual code, flagging code archaeology signals (AI-port artifacts, idiom mismatches, license/positioning conflicts), and gating large codebases (over 100k LoC) for user confirmation. Reports are written in 简体中文 to `./reports/<name>_analysis_<depth>.md` with ASCII-only filenames; cross-platform (Windows PowerShell + *nix bash). Supports three depth levels (quick / medium / deep) and two writing styles (standard / concise) via parameter.
+description: Analyze a software project and produce a structured markdown report whose outline adapts to the project's type (interface library, application, framework, protocol implementation, research code, monorepo, or a generic fallback) rather than forcing every project through the same template. Universal elements include a concepts/terminology glossary, README-vs-reality verification, code archaeology checks, license/distribution review, and an observed-facts/subjective-assessment split. Accepts a GitHub repo name (searches and clones), a local directory path, an uploaded archive (.zip/.tar.gz/.tar), or a submodule form `<repo-or-path>::<subpath>` for drilling into one subdirectory. Use this skill whenever the user wants to understand, explore, study, or summarize an existing project, codebase, or repository — even without the word "analyze." Strong trigger phrases include "了解这个项目", "看一下这个仓库", "整理一份项目报告", "分析 X repo", "study this repo", "understand this codebase", or simply naming a project and asking for a writeup. Reports are written in 简体中文 to `./reports/<name>_analysis_<depth>.md` with ASCII-only filenames; cross-platform (Windows PowerShell + *nix bash). Supports three depth levels (quick / medium / deep) and two writing styles (standard / concise) via parameter.
 ---
 
 # Project Analyzer
 
-Produces a structured markdown analysis report of a software project, tailored to a user-selected depth and style.
+Produces a structured markdown analysis report of a software project. **The outline is chosen based on what kind of project this is**, not pre-decided by template. An interface library and a CLI application demand fundamentally different framings; this skill picks one of seven presets (or a fallback) so the report's structure serves the project, not the other way around.
 
 ## Inputs to collect
 
@@ -102,40 +102,48 @@ Wait for user confirmation before proceeding. Honor the user's choice.
 
 If LoC ≤ 100,000, proceed silently.
 
-### Step 2 — Analyze according to depth
+### Step 2 — Identify project type
 
-For each tier, do everything in the lower tiers first, then add.
+Before the main analysis, do a fast type pass: read README + top-level structure, then assign the project to one of seven types. **Different types get different outlines and different focus lists** — this is where the redesign earns its keep over a fixed template.
 
-#### `quick` — surface scan
-- Read `README*`, top-level docs (`CONTRIBUTING`, `ARCHITECTURE`, `docs/`)
-- Get directory tree 2–3 levels deep (`tree -L 3` or `find . -maxdepth 3`)
-- Identify entry points (`main.*`, `index.*`, `__main__.py`, binary targets in `Cargo.toml`, `bin` field in `package.json`)
-- Read package metadata (`Cargo.toml`, `package.json`, `pyproject.toml`, `go.mod`, `pom.xml`, etc.)
-- Skim 1–2 representative source files
-- **Build the module list** (see "Module identification" below) — just the list, no per-module dive. **Skip entirely in submodule mode** — a submodule report has no modules section.
+**Detection signals** (any 2+ → match; if multiple types match, use the priority order at the bottom):
 
-#### `medium` — selective deep dive (default)
-- Fully read entry points and main modules
-- Identify and read core data structures / type definitions / key traits/interfaces
-- Trace 1–2 typical end-to-end call chains
-- Note key dependencies and their purpose
-- Look at the test suite to learn intended behaviors
-- **Compare README claims to code reality** — for each major feature claim in the README (especially numbered claims like "8-stage pipeline", "5-layer security", "20+ providers"), verify against actual code. Note discrepancies in the report. Many users learn projects from READMEs and never read code; surfacing these gaps is one of the highest-value things this skill provides.
-- **Build the module list, score it, deep-dive the TOP-N (default 3–5)** — see "Module identification" below. **Skip entirely in submodule mode.**
-- **Watch for code archaeology signals** (see `Code archaeology signals` section below)
+| Type | Signals |
+|---|---|
+| **interface-library** (接口库 / 系统库) | 主要产物是 `.so` / `.a` / crate / wheel / gem，**无 main 二进制**或仅有 demo CLI；README 描述方式是"提供 X / Y / Z 能力"或"封装 syscall X"；公共 API 可独立列出（headers / `pub fn` / `__all__`）；直接依赖某底层机制（syscall、内核子系统、协议帧、设备节点）；测试以 API 调用为主 |
+| **application** (应用 / 工具) | 顶层有 `main` 入口或显式二进制目标；CLI / daemon / TUI 行为；README 讲使用场景或子命令；issue 多讨论 e2e 行为 |
+| **framework** (框架 / SDK) | 库形态但通过 trait / interface / abstract class 强加架构约束；明确暴露扩展点（middleware / plugin / hook）；用户代码需要"塞进"框架的生命周期 |
+| **protocol** (协议实现) | 引用 RFC / draft 号；存在 wire format / conformance test；命名里含 protocol / spec / codec / wire / frame |
+| **research** (研究代码) | 引用论文 arXiv id / paper.bib；有 `experiments/` / `checkpoints/` / `configs/` 目录；README 主要讲方法和实验结果 |
+| **monorepo** | `packages/` / `apps/` / `crates/` 下有 ≥ 3 个独立可用的子项目；根 README 是聚合性的 |
+| **fallback** (兜底通用) | 以上信号都不够强，或项目混合多种特征难以归类 |
 
-#### `deep` — comprehensive analysis
-- Map the full module graph and inter-module dependencies
-- Read non-trivial algorithms / clever logic
-- Identify performance-critical paths and any benchmarks
-- Note security / safety considerations (unsafe blocks, eval, sandboxing, etc.)
-- Examine error handling patterns
-- Check build / CI / release configuration
-- Look at issue tracker or CHANGELOG for recurring pain points (if accessible)
-- **Expand every module** in the module list to the medium per-module depth. If the module count is > 15, print the full list to chat and **continue expanding all** — append: *"模块数较多（X 个），按 deep 档展开全部。如希望只展开部分，请打断我并指定。"* Don't pause execution. **Skip entirely in submodule mode.**
-- **All the medium-tier items above also apply** — including README-vs-reality check and archaeology signals — done more thoroughly
+**Priority when multiple match**: interface-library > protocol > framework > research > monorepo > application > fallback.
 
-### Step 3 — Generate the report
+**Hybrid handling**: if a project is genuinely A+B (e.g. CLI tool that's also a library), pick the primary outline and add 1–2 chapters from the secondary preset. State this explicitly in the report header.
+
+**State the inferred type to the user** before continuing (don't pause):
+
+> "看起来这是一个 **<type>** 项目（依据：<一句话理由>），按对应的 outline 来写。如果判定错了请打断我。"
+
+In submodule mode, type detection runs on the **subpath**, not the parent repo — a subdirectory may have a different character than the whole.
+
+### Step 3 — Analyze (according to type + depth)
+
+Run two things in parallel:
+
+1. **Universal analysis methods** — applied on every project, all depths. See "Universal analysis methods" section.
+2. **Type-specific focus list** — see the relevant preset under "Project type presets".
+
+The depth tier sets intensity, not which dimensions to cover:
+
+- `quick` — touch each dimension lightly (read README, top-level structure, list public surface or main entry points, skim 1–2 source files)
+- `medium` — go into the type's primary chapters in real depth; verify README claims against code; surface archaeology signals
+- `deep` — expand every chapter the preset names; trace multiple end-to-end paths or cover every interface group; include ABI / versioning / cross-platform notes where relevant
+
+**No TOP-N scoring formula.** Pick which items to expand (which interfaces, modules, paths, extension points) based on what's interesting in *this* project. If you do narrow the focus, name what you skipped so readers don't infer "skipped = unimportant".
+
+### Step 4 — Generate the report
 
 **Output path:**
 
@@ -151,49 +159,39 @@ Create `./reports/` if it doesn't exist.
 - Sanitize the project name: strip `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, and any whitespace (replace with `-`).
 - The report **content** is still written in 简体中文 per the style guide; only the filename is ASCII.
 
-Examples: `./reports/langchain_analysis_medium.md`, `./reports/axum_analysis_deep.md`
+#### Universal sections (always present, in this order)
 
-**Required core dimensions** (always present, in this order):
-
-1. **需求 / 问题域** — what problem does this solve? who's the target user?
-2. **协议与分发** — license (MIT / Apache / GPL / CC / proprietary / dual-license / etc.), commercial use restrictions, distribution model (single binary / Docker / SaaS / library). This dimension comes early because it determines whether the target users from #1 can actually use the project. Flag any conflicts (e.g., "production-ready multi-tenant platform" + "non-commercial-only license" is a red flag worth surfacing).
-3. **设计思路** — core abstractions, design philosophy, key architectural decisions
-4. **modules** — module-level breakdown of the codebase. Replaces the older free-form "具体实现" / "code organization" prose. Always starts with a **module list table** (name, one-line responsibility, LoC, key entry files). Per-depth expansion rules are in the "Module identification" section below.
-5. **特点与不足** — split into two subsections:
-   - **客观事实** — observed facts, no judgment (e.g., "no test coverage on the parser module", "uses unsafe in 12 places")
-   - **主观评价** — Claude's own assessment grounded in the facts above
+1. **元数据头** — see "Header" below
+2. **问题域** — what problem does this solve? who's the target user? **what would users have to do without this project?** (反事实陈述是这一节的灵魂)
+3. **概念与术语** — definition-list glossary; see "Universal section: 概念与术语" below
+4. **[type-specific chapters]** — chapters dictated by the preset chosen in Step 2
+5. **协议与分发** — license, commercial use restrictions, distribution model. Usually a short section near the end. Promote to higher position **only** when there's a conflict worth flagging (e.g., "production-ready" claim + non-commercial license)
+6. **特点与不足** — split into:
+   - **客观事实** — observed, verifiable items. README-vs-reality mismatches and code archaeology signals that didn't fit naturally inside other chapters land here.
+   - **主观评价** — Claude's own assessment grounded in those facts. No fluff; tie each opinion to a specific fact above.
 
 **Submodule mode dimension overrides:**
 - **协议与分发** collapses to one line: *"继承自母仓库 `<repo>` 的 `<license>`"*. No standalone section unless the submodule has its own LICENSE/NOTICE.
-- **modules** section is **omitted** — a submodule report is itself a deep view of one module. **All module-list / scoring / TOP-N steps are skipped at every depth tier in submodule mode** — this override beats the depth-tier instructions in Step 2.
+- **概念与术语** still present, scoped to the subpath.
+- Type detection is run on the subpath, not the parent.
 - Other dimensions stay, scoped to the submodule.
 
-**Flexible chapters** — beyond the four required, add chapters that fit *this* project. Don't force every chapter on every project. Examples by project type:
+#### Style guide
 
-| Project type | Likely extra chapters |
-|---|---|
-| Framework | Extension points, plugin model, escape hatches |
-| Library | API design, ergonomics, common pitfalls |
-| Application | Deployment model, configuration, ops story |
-| Research code | Experimental scope, reproducibility |
-| Protocol/spec | Wire format, conformance, interop |
-
-### Style guide
-
-#### `standard` (default)
+**`standard` (default)**
 - Complete sentences, prose-heavy
 - Use markdown headings, tables, fenced code blocks
 - Suitable for sharing with teammates
 - Example: *"The project uses a Channel trait to abstract over transport mechanisms, allowing transports like Unix sockets and TCP to plug in through a uniform interface."*
 
-#### `concise` (速记式)
+**`concise` (速记式)**
 - Telegraphic, note-style — drop articles and connecting words
 - Heavy use of `→`, `:`, `/`, bullet fragments
 - Information density over readability for outsiders
 - Example: *"Channel trait → 抽象传输层；transports（unix sock / tcp）统一接入"*
 - Sections still use markdown headers, but bullets dominate over paragraphs
 
-### Header
+#### Header
 
 Always start the report with a metadata header:
 
@@ -201,13 +199,14 @@ Always start the report with a metadata header:
 # <项目名> 分析报告
 
 - **来源**: <github URL / local path / archive>
+- **项目类型**: interface-library | application | framework | protocol | research | monorepo | fallback  <!-- 若为 hybrid，写 "A (主) + B (次)" -->
 - **分析深度**: quick | medium | deep
 - **写作风格**: standard | concise
 - **生成日期**: YYYY-MM-DD
 - **commit (if cloned)**: <short SHA>
 ```
 
-### Step 4 — Present the report
+### Step 5 — Present the report
 
 After writing the file:
 
@@ -217,145 +216,309 @@ After writing the file:
 
 Do not assume any sandbox-only presentation helper exists.
 
-## Module identification
+## Project type presets
 
-The **modules** dimension is one of the highest-value parts of the report. It gives readers a navigable map of the codebase and tells them where to dig next.
+Each preset specifies the outline chapter order, what each chapter must answer, and the per-depth focus. **Treat the outline as a starting point, not a contract** — drop a chapter if the project genuinely has nothing to say there, or add one if you find something the preset didn't anticipate.
 
-### Candidate discovery (structural signals first)
+### Preset: interface-library (接口库 / 系统库)
 
-| Language / layout | Module candidates |
-|---|---|
-| Go | each top-level subdir of `cmd/`, `internal/`, `pkg/` |
-| Rust | each crate in a Cargo workspace |
-| Node monorepo | each entry in `packages/*`, `apps/*` (read `pnpm-workspace.yaml` / `package.json#workspaces`) |
-| Python | packages declared in `pyproject.toml`, or top-level dirs under `src/` |
-| Java / Maven / Gradle | top-level Maven `<modules>` entries from `pom.xml`; otherwise each second-level package under `src/main/java/<group>/<artifact>/`; Gradle multi-project reads `settings.gradle(.kts)` |
-| Other / flat | each top-level non-vendor / non-build / non-test directory |
+**Chapter outline** (after universal 元数据头 / 问题域 / 概念与术语):
 
-### Aggregation rules (when candidate count > 12)
+- **底层基础** — 依赖的 syscall / 内核机制 / 协议；项目把哪些底层细节抽象掉了；和同层级竞品（如有）的关系
+- **接口分类** — 表格 + 简述，按"上下文构造 / 配置 / 状态查询 / 序列化 / 销毁"或项目自身的自然分组列出全部公共 API
+- **接口设计要点** — 命名约定、错误模型、生命周期、线程安全、不透明指针 vs 暴露结构体、可扩展性。每条配 1–2 行代码引用
+- **使用方式** — 一段最小 working 示例 + 真实项目中的典型集成位置（哪些知名项目用它、用在哪一步）
+- 协议与分发 / 特点与不足（universal）
 
-Plain candidate lists explode on large repos. Aggregate before showing:
+**Per-depth focus**:
+- `quick`: 罗列公共头文件 / pub 接口，分组到一级（如"上下文 / 规则 / 应用"），不深入
+- `medium`: 接口分类填到二级（每个 API 一句话功能，从 source 验证）；选 1–2 个典型 API 读实现，提炼设计取舍；从 examples/ 或 tests/ 摘最小示例
+- `deep`: 每个接口分组成段（覆盖：API 列表 + 典型调用顺序 + 内部如何翻译到底层调用）；错误模型 / 线程安全 / 生命周期完整成段；跨平台 / 多架构差异；ABI / symbol versioning
 
-- **Infrastructure bucket**: merge utility-ish dirs (name matches `testutil`, `safego`, `internal/util*`, `i18n`, `version`, `errors`, etc.) into one "基础设施" entry
-- **Semantic clusters**: merge dirs whose names indicate a shared concern (e.g., `memory` + `consolidation` + `knowledgegraph` + `vault` → "记忆与知识"). Use LLM judgment, but err toward keeping things separate when in doubt
-- **Independent-seat exception**: directories explicitly named in README / CLAUDE.md / ARCHITECTURE / docs are **never aggregated** — those are the modules the project itself considers core
+### Preset: application (应用 / 工具)
 
-### User visibility (non-blocking)
+**Chapter outline**:
 
-- `quick`: produce the list silently
-- `medium` / `deep`: print the aggregated list to chat (one line per module: name + one-line responsibility + LoC), then **continue the analysis using that list as-is**. Append: *"如需合并、拆开或忽略某些模块，请打断我；否则按此清单继续。"* Do not pause execution waiting for a reply — the user can always interrupt.
+- **整体架构** — 高层组件图（文字或 mermaid 描述）、进程模型、主要状态机
+- **关键数据流 / 控制流** — 至少一条 e2e 路径（用户输入 → 输出 / 副作用），把途径的组件按顺序串起来；指出哪些是同步、哪些异步、哪些跨进程
+- **实现要点** — 选 2–4 个非平凡的实现细节（关键数据结构、算法、并发模型、IPC / RPC 形式、持久化、调度）
+- **部署与运维** — 怎么部署、配置、监控、升级；纯 CLI 工具时缩为"使用方式"小节
+- 协议与分发 / 特点与不足
 
-### TOP-N scoring (medium depth)
+**Per-depth focus**:
+- `quick`: 入口 → 顶层架构图 → 一条主路径名字层面贯通
+- `medium`: 一条 e2e 路径详写（含关键文件:行号）；2 个实现要点深入
+- `deep`: 多条 e2e 路径；错误处理 / 重试 / 退路；完整部署故事；性能关键路径与 benchmark（如有）
 
-Score each module to decide which ones get a deep paragraph in `medium`:
+### Preset: framework (框架 / SDK)
 
-```
-score = 0.4 * LoC_normalized
-      + 0.4 * incoming_imports_normalized
-      + 0.2 * readme_mentions_normalized
-```
+**Chapter outline**:
 
-All three components are normalized **relative to the maximum value across modules in this analysis** so they're directly comparable (top module on each axis = 1.0):
+- **设计哲学** — 核心抽象（最重要的 1–3 个 trait / interface / 概念）；与同类框架（如 axum vs actix、Express vs Fastify）的差异点
+- **扩展点矩阵** — 表格：扩展点 / 形式（trait / hook / middleware / decorator）/ 触发时机 / 典型用途
+- **内部机制** — 框架自己怎么把扩展点串起来、生命周期管理、错误传播、类型推断或反射的代价
+- **典型用法** — minimal "hello world" + 一个非平凡场景（中间件链、自定义提取器之类）
+- 协议与分发 / 特点与不足
 
-- `LoC_normalized` = module LoC ÷ **max module LoC**
-- `incoming_imports_normalized` = this module's incoming-import count ÷ **max incoming-imports across modules**. Count = number of other modules that reference this module's package path, excluding the module's own directory.
-  - **Prefer the harness's Grep tool** (cross-platform, no shell quoting issues). Pattern: the module's import path or display name. Filter out matches whose file path starts with the module's own directory.
-  - bash fallback (Go example): `grep -rln "<module-pkg-path>" --include='*.go' . | grep -v "^./<module-dir>/" | wc -l`
-  - PowerShell fallback (Go example): `(Get-ChildItem -Recurse -Filter *.go | Select-String -Pattern '<module-pkg-path>' -List | Where-Object { $_.Path -notmatch '[\\/]<module-dir>[\\/]' }).Count`
-  - Other languages: search for the module's outward identifier — Rust: crate name in `use` statements; Node: package name in `import`/`require`; Python: dotted import path.
-- `readme_mentions_normalized` = this module's mention count ÷ **max mention count across modules**. Count = occurrences of the module name (or its display name) in README / CLAUDE.md / top-level docs (`ARCHITECTURE.md`, `docs/*.md`).
+**Per-depth focus**:
+- `quick`: 列出核心抽象 + 扩展点矩阵（一级）
+- `medium`: 设计哲学成段 + 跟踪一个扩展点从声明到调用的完整路径
+- `deep`: 内部机制完整、与同类对比成段、覆盖错误传播 / 生命周期边界 case
 
-Default `N = 3–5` depending on total module count. **Always print the score table for selected modules** in the report so the reader can disagree with the ranking.
+### Preset: protocol (协议实现)
 
-### Per-depth section behavior
+**Chapter outline**:
 
-| Depth | modules section contents |
-|---|---|
-| `quick` | **Module list table only** (name, one-line responsibility, LoC, entry files). Do NOT read inside modules. Append: *"如需展开某模块，请用 `<repo>::<module>` 再次触发本 skill。"* |
-| `medium` | Module list table + score table for TOP-N + **per-TOP-N deep paragraph** (~150–250 字 each, covering: core abstractions, key files, visible idiom / archaeology signals). Explicitly call out which modules were **not** detailed, so the reader doesn't infer "not detailed = not important". |
-| `deep` | Per-module paragraph for every module (medium per-module depth). Table still appears first as a TOC. If module count > 15, list them and ask the user to pick which to expand vs. summarize — deep ≠ blind. **Optional**: append a "模块依赖" subsection with ≤ 15 prominent edges (A → B), filtered by call density. |
+- **协议定位** — 在协议栈中的位置、上下游、与同类协议（如有）的关系；引用的 RFC / draft
+- **wire format** — 报文 / 帧 / 包结构、字段含义、版本编码；尽量给一张 ASCII 字段图或字节布局表
+- **实现策略** — 状态机、解析器、序列化策略；手写 parser 还是 codegen；零拷贝 / 内存安全策略
+- **互操作 / 一致性** — 与官方测试套件的覆盖、已知互操作问题
+- 协议与分发 / 特点与不足
 
-## Code archaeology signals
+**Per-depth focus**:
+- `quick`: 协议定位 + wire format 一级骨架
+- `medium`: 完整 wire format + 解析器主路径
+- `deep`: 全部状态转换、错误恢复、互操作矩阵、与参考实现的差异
 
-Beyond just describing what's in the code, look for *meta-signals* that tell you about the project's development context. These often reveal more about quality and risk than the code itself:
+### Preset: research (研究代码)
 
-| Signal | What to look for | What it might mean |
-|---|---|---|
-| **Translation comments** | `// Adapted from <other-project>`, `// Matching TS <thing>`, `// Port of <X>` | Code is a port from another language; idioms may not be native; quality depends on translator skill |
-| **Idiom mismatch** | Field naming like `MemoryMB int` instead of `time.Duration` in Go; manual nullable patterns where a language has `Option`; etc. | AI-assisted port or non-native author; refactor cost if you fork |
-| **Aggressive version pins** | Language / runtime / DB pinned to the latest-or-newer release (a version ahead of current stable, or a DB version that just GA'd) | Author prioritizes new features over deployability; will block enterprise adoption |
-| **Scale vs attribution mismatch** | 200k+ LoC with single author or "X Contributors" generic credit | Either heavy AI assistance, ghost team, or historical aggregation; quality varies sharply across modules |
-| **Bundled third-party assets without attribution** | Vendored skills/data/configs from named projects with no credit in LICENSE/NOTICE | Compliance risk if you redistribute |
-| **README hyperbole vs code reality** | "8-stage pipeline" but code has 7; "20+ providers" but only 12 actively wired; "production-tested" with no observability config | Marketing-driven docs; trust code over README |
-| **Localization theater** | 30 README languages but core docs only in one | Optimizing for stars, not maintenance |
-| **Test/code organization** | Layered test directories (contracts/integration/invariants/scenarios) vs single `tests/` dump | Structured testing suggests engineering maturity |
-| **Commit cadence and authorship** (if accessible) | Long gaps, single-author bursts, AI-style commit messages | Sustainability signal |
+**Chapter outline**:
 
-When you find these signals, include them in the report — usually under "特点与不足 → 客观事实" (the signal itself) and "主观评价" (what it implies).
+- **方法** — 论文核心 idea 与代码的映射；指出哪段代码对应论文中哪个公式 / 算法 / 模块
+- **实验配置** — 数据集、超参、硬件假设
+- **复现路径** — 如何从 clone 到跑通；缺失了什么（数据、checkpoint、license）；预估资源
+- **局限** — 已知不工作的场景；论文未声明但代码里能看到的限制
+- 协议与分发 / 特点与不足
 
-## 输出示例（standard，节选）
+**Per-depth focus**:
+- `quick`: 方法概要 + 顶层目录映射到论文章节
+- `medium`: 公式 ↔ 代码映射详写；至少一条数据集 → 输出的复现命令
+- `deep`: 实验 reproducibility 全部覆盖；评测脚本逐项核对；与论文报告数字的可信度评估
 
-下面是一份 `medium` / `standard` 报告的片段，用来锚定风格——**不是模板**，章节顺序和措辞应根据具体项目调整。
+### Preset: monorepo
+
+**Chapter outline**:
+
+- **子项目矩阵** — 表格：子项目 / 一句话职责 / LoC / 主要语言 / 对外接口 / 状态（active / archived / experimental）
+- **关键流转** — 子项目之间的数据 / 依赖流（哪个产出被哪个消费）；如果是 trunk + plugins 模式，说清 trunk 是哪个
+- **共享基础设施** — build / lint / CI / 共享库 / 发布流程
+- **下钻建议** — 这个 monorepo 哪些子项目最适合用 `<repo>::<sub>` 单独分析
+- 协议与分发 / 特点与不足
+
+**Per-depth focus**:
+- `quick`: 子项目矩阵 + 一句话流转关系
+- `medium`: 流转成段 + 共享基础设施实地核对
+- `deep`: 每个子项目一段简评 + 给出 2–3 条具体的 submodule 下钻路径
+
+### Preset: fallback (兜底)
+
+Use when type detection isn't confident, or the project legitimately doesn't fit elsewhere. This is the old single-template approach, kept as a safety net.
+
+**Chapter outline**:
+
+- **设计思路** — 核心抽象、设计哲学、关键架构决策
+- **代码组织** — 模块清单表（name / 一句话职责 / LoC / 关键入口文件），全量列出。**不做 TOP-N 评分**；如果模块多，选 3–5 个用粗体段落详写，并显式列出"未详写模块"。
+- 协议与分发 / 特点与不足
+
+## Universal section: 概念与术语
+
+读后续章节前的词汇表。两类内容都收：
+- **外部概念**: 项目依赖但外部存在的技术（syscall、BPF、OCI spec、cgroup、SPI 等）
+- **本项目引入的抽象**: 项目自己造的词或赋予特定含义的类型（filter context、extractor、channel、layer 等）
+
+**收录规则**:
+- 3–8 条，硬上限 10。多了就成词典了
+- 只收"报告读者可能不知道 / 在本项目中有特定含义"的项
+- **不收**通用 CS 概念（function / module / branch / trait / class 等）
+- 每条 2–3 行：是什么 + 为什么这么设计 / 非显然之处，再加一行"在本项目中"指明它出现的位置和角色
+
+**格式（定义列表式，不是表格——密度高的内容塞不进表格单元格）**:
 
 ```markdown
-# axum 分析报告
+## 概念与术语
 
-- **来源**: https://github.com/tokio-rs/axum
+**<术语>** *(外部 / 本项目引入)*
+2–3 行：是什么、为什么这么设计、非显然之处。
+→ 本项目：在哪里出现、扮演什么角色。
+
+**<下一个术语>** *(外部 / 本项目引入)*
+...
+```
+
+**示例（节选自 libseccomp）**:
+
+```markdown
+**seccomp-bpf** *(外部)*
+Linux 内核 ≥3.5 提供的 syscall 过滤机制：进程一次性向内核安装一段 BPF 程序，之后每次发起 syscall 都先过该程序判定（allow/deny/kill/trap/log）。安装是单向的、不可撤销——这是它的安全模型基石。
+→ 本项目：所有公共 API 最终都落在"生成并安装一段 BPF"。
+
+**filter context (`scmp_filter_ctx`)** *(本项目引入)*
+不透明句柄类型（`typedef void *`），调用方不能直接访问字段。一个 context 持有：规则集、默认动作、目标架构集合、属性表。所有写操作作用在 context 上，最后由 `seccomp_load` 统一编译成 BPF 并安装。
+→ 几乎所有公共 API 的第一参数；生命周期：`init → arch_add* → rule_add* → load → release`。
+```
+
+## Universal analysis methods
+
+These run on every project regardless of type, at every depth (depth controls intensity, not whether to do them).
+
+### README-vs-reality check
+
+For each verifiable claim in README / 顶层 docs，**到代码里核对**：
+- 数字型 claim（"8-stage pipeline"、"20+ providers"、"5-layer security"）— 数一数代码里实际有几个
+- 列表型 claim（功能 / 平台 / 兼容版本）— 一项一项找代码证据
+- 性能型 claim（"10x faster"、"zero allocation"）— 找 benchmark 或 micro-optimization；找不到就标"未独立验证"
+- 状态型 claim（"production-ready"、"battle-tested"）— 看测试覆盖、CI 配置、issue 历史
+
+发现不符时，把它写进对应的正文章节（接口章节里发现接口数量不符 → 写在接口分类里），而不是单独堆到"特点与不足"。**只有**找不到合适章节安放的，才放进"特点与不足 → 客观事实"。
+
+为什么这重要：很多用户从 README 了解项目，从不读代码；surfacing 这种 gap 是本 skill 最高价值的产出之一。
+
+### Code archaeology signals
+
+观察 meta-signals — 它们往往比代码本身更能说明项目的开发背景、质量和风险。
+
+| Signal | 看什么 | 可能含义 |
+|---|---|---|
+| **Translation comments** | `// Adapted from <other-project>`, `// Matching TS <thing>`, `// Port of <X>` | 从另一种语言移植；idiom 可能不本土；质量取决于移植者水平 |
+| **Idiom mismatch** | Go 里 `MemoryMB int` 而不是 `time.Duration`；语言有 `Option` 却手写 nullable 模式 | AI 辅助移植或非母语作者；fork 后改造成本 |
+| **Aggressive version pins** | 语言 / 运行时 / DB 锁在最新或预发布版本 | 优先尝鲜，部署阻力；企业落地难 |
+| **Scale vs attribution mismatch** | 200k+ LoC 但只有单作者或"X Contributors"泛指 | 重度 AI 辅助 / 影子团队 / 历史合并；质量在不同模块间差距大 |
+| **Bundled third-party assets without attribution** | vendored 的 skills / data / configs 来自具名项目但 LICENSE / NOTICE 无致谢 | 若 redistribute 有合规风险 |
+| **README hyperbole vs code reality** | "8-stage" 但代码 7 个；"20+ providers" 但实际 12；"production-tested" 无可观测性配置 | 营销驱动的 docs；信代码不信 README |
+| **Localization theater** | 30 种语言 README 但核心 docs 只 1 种 | 为 star 数优化，不是为 maintenance |
+| **Test/code organization** | 分层测试（contracts / integration / invariants / scenarios）vs 一个 `tests/` 堆 | 结构化测试 → 工程成熟度信号 |
+| **Commit cadence and authorship** | 长时间空档、单作者爆发、AI 风格 commit message | 可持续性信号 |
+
+发现这些信号时，按以下原则落地：
+- 信号本身（"BPF 编译器是手写 C"） → "客观事实"
+- 它意味着什么（"维护成本高，但 zero 第三方依赖"） → "主观评价"
+
+### 概念抽取
+
+读 README 和顶层结构时同步收集候选术语，按"概念与术语"的收录规则筛选。优先收：项目反复出现的大写类型名、README 中加粗或代码 fence 起来的名词、依赖列表中需要解释才能让读者理解为什么需要它的库。
+
+## 输出示例
+
+下面是一份 `medium` / `standard` 报告的片段（interface-library 类型，节选自 libseccomp），用来锚定风格——**不是模板**，章节顺序和措辞应根据具体项目调整。
+
+```markdown
+# libseccomp 分析报告
+
+- **来源**: https://github.com/seccomp/libseccomp
+- **项目类型**: interface-library
 - **分析深度**: medium
 - **写作风格**: standard
-- **生成日期**: 2026-05-11
-- **commit**: a1b2c3d
+- **生成日期**: 2026-05-14
+- **commit**: abc1234
+
+## 问题域
+
+直接用 `prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER)` + 手写 BPF 字节码可以完成 syscall 过滤，
+但调用方要自己承担三件不平凡的事：
+(1) 组装 BPF 指令集（指令小、人写易出错）；
+(2) 处理不同架构上同名 syscall 编号不同（x86_64 / arm64 / i386 / x32 各异）；
+(3) 安装失败就是进程崩溃，调试只能靠 strace + audit log。
+libseccomp 把这三件事抽象成"规则 + 编译"，调用方写一组高层规则，库负责生成正确架构的 BPF 并加载。
+目标用户：容器运行时（runc/crun/podman）、systemd 单元、桌面沙箱（Flatpak/Bubblewrap）等需要 hardening 的程序。
+
+## 概念与术语
+
+**seccomp-bpf** *(外部)*
+Linux 内核 ≥3.5 提供的 syscall 过滤机制：进程一次性向内核安装一段 BPF 程序，之后每次发起 syscall 都先过该程序判定（allow/deny/kill/trap/log）。安装是单向的、不可撤销——这是它的安全模型基石。
+→ 本项目：所有公共 API 最终都落在"生成并安装一段 BPF"。
+
+**BPF** *(外部)*
+Berkeley Packet Filter，最早为 tcpdump 设计的内核态过滤虚拟机；指令集只十余条、无任意循环，便于内核做加载前静态验证。seccomp 直接复用这套指令集来表达 syscall 规则——这也是为什么 libseccomp 内部要带一个编译器。
+→ 本项目：规则的目标语言；编译器位于 `src/gen_bpf.c`。
+
+**syscall number** *(外部)*
+syscall 在内核 syscall 表中的整数索引。同一名字（`openat`、`read`）在不同架构编号各异，BPF 程序里只能拿数字比较——所以多架构过滤必须先把名字翻成正确编号。
+→ 本项目：`src/arch-*.c` 维护各架构映射；`SCMP_SYS(name)` 宏在编译期翻译。
+
+**filter context (`scmp_filter_ctx`)** *(本项目引入)*
+不透明句柄类型（`typedef void *`），调用方不能直接访问字段。一个 context 持有：规则集、默认动作、目标架构集合、属性表。所有写操作作用在 context 上，最后由 `seccomp_load` 统一编译成 BPF 并安装。
+→ 几乎所有公共 API 的第一参数；生命周期：`init → arch_add* → rule_add* → load → release`。
+
+**default action** *(本项目引入)*
+context 的核心属性，未命中任何规则时的兜底。取值：`SCMP_ACT_KILL` / `TRAP`（发 SIGSYS）/ `ERRNO`（返回指定 errno）/ `LOG` / `ALLOW`。这是 seccomp 从 "allow-list-or-die" 推广到细粒度策略的关键扩展。
+→ `seccomp_init()` 调用时第一个必须确定的参数。
+
+## 底层基础
+
+libseccomp 完全构建在 seccomp-bpf 之上，自身不引入任何额外的内核 patch。三件抽象掉的事：
+1. **BPF 编译**：`src/gen_bpf.c` 实现了一个针对 syscall 过滤场景的优化编译器，把规则树编译成对应架构的 BPF 程序。优化点包括 syscall 编号排序后的二分跳转、相同动作的规则合并。
+2. **多架构映射**：`src/arch-*.c`（每架构一个文件）维护 syscall 名 → 编号映射；`SCMP_SYS(name)` 在编译期完成翻译。新增架构主要工作是补这张表。
+3. **错误传播**：所有公共 API 用 `int` 返回 `-errno`，避免 errno 全局污染；这点与 POSIX 风格不一致但更适合库使用。
+
+无 vendored 第三方代码、无 codegen 工具链——`gen_bpf.c` 是手写 C。
+
+## 接口分类
+
+| 分组 | API | 一句话功能 | 典型调用时机 |
+|---|---|---|---|
+| 上下文 | `seccomp_init` / `seccomp_release` | 创建 / 释放 filter context | 启动期最早 / 最晚 |
+| 架构 | `seccomp_arch_add` / `_remove` / `_exist` | 配置目标架构集合 | 启动期，rule_add 之前 |
+| 规则 | `seccomp_rule_add` / `_exact` / `_array` | 加入 allow/deny 规则 | 启动期，load 之前 |
+| 属性 | `seccomp_attr_set` / `_get` | 设置 default action、NoNewPrivs 等 | 启动期，可与 rule_add 交叉 |
+| 应用 | `seccomp_load` | 把 context 编译并安装到内核 | 启动期最后一步（不可逆） |
+| 序列化 | `seccomp_export_pfc` / `_bpf` | 导出规则用于调试 / 离线编译 | 调试 |
+
+## 接口设计要点
+
+- **不透明句柄**: `scmp_filter_ctx` 被 typedef 到 `void *`，调用方拿到也无法访问字段——版本演进时内部结构可任意改。代价是 debugger 里看不到内容，需要 `seccomp_export_pfc` 转储。
+- **错误模型**: 公共 API 返回 `int`，0 成功，负值是 `-errno`。没有全局 errno 污染；但用户需要记得取反才能传给 `strerror()`。
+- **生命周期**: 单写多读语义——`seccomp_load` 后 context 进入只读阶段，再调写操作返回 `-EBUSY`。
+- **线程安全**: 单个 context 不是线程安全的（写操作需要外部加锁）；但加载后的 filter 自然作用于整个进程的所有线程。
+- **跨架构**: 同一份规则可以同时编译到 x86_64 + arm64 + i386，`seccomp_arch_add` 增加目标架构后规则会被多次实例化。
+
+## 使用方式
+
+最小示例（拒绝 `getuid`、其余允许）：
+
+\`\`\`c
+#include <seccomp.h>
+scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_ALLOW);  // 默认允许
+seccomp_rule_add(ctx, SCMP_ACT_ERRNO(EPERM), SCMP_SYS(getuid), 0);
+seccomp_load(ctx);
+seccomp_release(ctx);
+\`\`\`
+
+典型集成位置：
+- **runc/crun**: 在 init 阶段（容器命名空间已建立、exec 用户进程之前）从 `config.json` 的 seccomp profile 加载规则
+- **systemd**: 在 unit 启动时通过 `SystemCallFilter=` 配置项，systemd 内部调用 libseccomp 构建规则
+- **Bubblewrap / Flatpak**: 在 sandbox 启动器中加载预设策略
 
 ## 协议与分发
 
-axum 采用 MIT license，无附加商业限制，作为 crate 通过 crates.io 分发。它是一个库（library），不提供独立运行的二进制，使用者需要在自己的 Rust 工程中引入。由于无 GPL 类传染条款，可自由用于商业闭源项目。
-
-## modules
-
-| 模块 | 一句话职责 | LoC | 关键入口 |
-|---|---|---|---|
-| routing | URL → handler 匹配树 | 2.8k | `src/routing/mod.rs` |
-| extract | request → handler 参数提取 | 3.2k | `src/extract/mod.rs` |
-| middleware | tower 层栈适配 | 1.4k | `src/middleware.rs` |
-| response | 类型 → HTTP response 转换 | 0.9k | `src/response/mod.rs` |
-| handler | Handler trait 与实现 | 0.7k | `src/handler/mod.rs` |
-
-**TOP-N 评分**（`score = 0.4·LoC + 0.4·imports + 0.2·readme`，组内最大值归一化）：
-
-| 模块 | LoC | imports | readme | score |
-|---|---|---|---|---|
-| extract | 1.00 | 0.84 | 0.62 | **0.86** |
-| routing | 0.88 | 1.00 | 1.00 | **0.95** |
-| response | 0.28 | 0.71 | 0.40 | 0.48 |
-
-**routing（详写）**：核心是 `Router::new()` 构建的 prefix-tree matcher。路由通过 builder API（`.route("/x", get(handler))`）注册，无过程宏；这是 README "macro-free" 主张的代码对应。匹配在 hot path 上做了零分配优化，但需要在编译期推断 handler 签名，是 trait bound 报错冗长的主要来源……（继续到 150–250 字）
-
-**extract（详写）**：通过 `FromRequest` / `FromRequestParts` trait 把 request 拆成 handler 参数。提取器可组合（`Json<T>` + `Query<U>` + `State<S>` 同时存在），失败路径返回 `Rejection` 类型……（继续到 150–250 字）
-
-**未详写模块**：middleware（功能聚焦于一层 tower 适配，无独立架构话题）；response、handler（实现直白，可在 routing/extract 的语境中顺带理解）。
+LGPL-2.1（不是 GPL）。允许链接到闭源程序（动态或静态链接都满足 LGPL 条款），无商业限制。
+分发为系统包（apt/dnf/...）和源码 release；上游不提供官方 binary release。
 
 ## 特点与不足
 
 ### 客观事实
-- 核心 trait `Handler` 通过 GAT 实现零分配的中间件链
-- 测试套件覆盖路由匹配、提取器、中间件三个层次，但缺少端到端的 HTTP/2 测试
-- 依赖 `tower` 生态，意味着 axum 用户事实上需要先理解 `tower::Service`
+- BPF 编译器 `src/gen_bpf.c` 是手写 C，无 codegen 依赖
+- 多架构支持表（`src/arch-*.c`）覆盖 x86 / arm / mips / s390 / ppc / riscv / loongarch 等
+- 测试 (`tests/`) 同时包含 API 行为测试和 BPF 输出快照测试（按架构）
+- README 声称支持的架构在 `src/arch.c` 的 `arch_def` 表中可逐一对应——无水分
+- 错误返回用 `-errno` 而非 POSIX 风格的 `errno + -1`，对 C 库来说是少见选择
 
 ### 主观评价
-学习曲线在 trait bound 推断错误时陡峭——错误信息常常长达数十行，这是 axum 借力 tower 生态付出的成本。对于已经熟悉 Rust async 与 tower 的团队，axum 是当前最人体工学的选择；对于刚接触 Rust 后端的团队，`actix-web` 的报错更友好。
-
-注：README 宣称的 "macro-free routing" 在源码中确实成立（路由通过 builder 而非过程宏构建），与代码一致。
+项目质量高、scope 小而专注——这是它能成为容器生态默认依赖的根本原因。
+不透明句柄 + `-errno` 风格让 ABI 演进自由度大，从 2.x 到 2.5+ 保持了二进制兼容。
+对新使用者最大的认知障碍不是 API 本身（很简单），而是理解"安装是单向且作用于整个进程"这一前置事实——
+这一点 README 提及但不显眼，可能是新用户的踩坑高发区。
 ```
 
 注意示例中：
-- 协议与分发先于设计/实现出场，符合"能不能用得上"的优先级
-- modules 章节先给清单表（覆盖全部模块），再给 TOP-N 评分表（让读者看到打分依据），最后用粗体模块名分段详写；**未详写模块必须显式列出**，避免读者误认为它们"不重要"
-- 客观事实只列可验证项，主观评价基于这些事实展开
-- README 主张被显式比对（"macro-free routing" 那一句）
+- **问题域**用反事实陈述（"没有它你要自己做……"）打开，比"这是一个 syscall 过滤库"信息量大得多
+- **概念与术语**紧跟问题域，让后续章节里出现的 BPF / context / default action 不需要再解释
+- **底层基础**和**接口分类 / 设计要点**是 interface-library 类型独有的，替代了通用模板里的"设计思路 / modules"
+- **协议与分发**位置靠后（只占一段），因为这是个 LGPL 库，没有需要前置警告的冲突
+- **客观事实 / 主观评价**严格分开；评价的每一句都能追溯到上面的一条事实
 
-（上面省略了"## 设计思路"章节，按要求顺序它应位于"协议与分发"与"modules"之间。）
+---
 
 - If a project is too large to fully analyze at the requested depth, write the report anyway and note in the header which areas were sampled vs fully covered.
-- If the source resolves to multiple top-level directories (a monorepo), ask the user whether to analyze the whole repo or a specific subproject.
+- If the source resolves to multiple top-level directories (and not detected as monorepo), ask the user whether to analyze the whole repo or a specific subproject.
 - If the user provides a name that returns no GitHub matches, ask whether they meant something else or want to provide a URL/path directly.
 - Don't fabricate. If you couldn't determine something (e.g., performance characteristics without benchmarks), say so explicitly in the report.
