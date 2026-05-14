@@ -147,12 +147,14 @@ LoC ≤ 100,000 时静默通过。
 
 **输出路径：**
 
-- 仓库分析：`./reports/<project-name>_analysis_<depth>.md`
-- 子模块分析：`./reports/<repo>__<subpath-flattened>_analysis_<depth>.md`
-  - `<subpath-flattened>`：把 `/` 和 `\` 替换为 `-`（例：`internal/pipeline` → `internal-pipeline`）
-  - 示例：`./reports/goclaw__internal-pipeline_analysis_deep.md`
+所有报告按仓库分文件夹存放：`./reports/<repo>/` 下集中存放该仓库的所有报告（不同深度、不同子模块的分析都落在同一个仓库目录里）。
 
-不存在就建 `./reports/`。
+- 仓库分析：`./reports/<repo>/analysis_<depth>.md`
+- 子模块分析：`./reports/<repo>/<subpath-flattened>_analysis_<depth>.md`
+  - `<subpath-flattened>`：把 `/` 和 `\` 替换为 `-`（例：`internal/pipeline` → `internal-pipeline`）
+  - 示例：`./reports/goclaw/internal-pipeline_analysis_deep.md`
+
+不存在就建 `./reports/<repo>/`。
 
 **文件名规则（仅 ASCII）：**
 - 仅用 ASCII 字符——不带 CJK / 重音 / emoji。非 ASCII 路径会在 Windows 和跨平台流水线里出问题。
