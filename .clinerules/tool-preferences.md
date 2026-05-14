@@ -1,8 +1,3 @@
----
-name: tool-preferences
-description: Hard rules for which tools Cline must prefer in this workspace. Native file-IO tools are slow and context-hungry; bash via execute_command is the default. This rule is binding — deviations require explicit reasons.
----
-
 # Tool Preferences (binding)
 
 ## Why this exists

@@ -1,47 +1,47 @@
 ---
 name: project-analyzer
-description: Analyze a software project and produce a structured markdown report whose outline adapts to the project's type (interface library, application, framework, protocol implementation, research code, monorepo, or a generic fallback) rather than forcing every project through the same template. Universal elements include a concepts/terminology glossary, README-vs-reality verification, code archaeology checks, license/distribution review, and an observed-facts/subjective-assessment split. Accepts a GitHub repo name (searches and clones), a local directory path, an uploaded archive (.zip/.tar.gz/.tar), or a submodule form `<repo-or-path>::<subpath>` for drilling into one subdirectory. Use this skill whenever the user wants to understand, explore, study, or summarize an existing project, codebase, or repository — even without the word "analyze." Strong trigger phrases include "了解这个项目", "看一下这个仓库", "整理一份项目报告", "分析 X repo", "study this repo", "understand this codebase", or simply naming a project and asking for a writeup. Reports are written in 简体中文 to `./reports/<name>_analysis_<depth>.md` with ASCII-only filenames; cross-platform (Windows PowerShell + *nix bash). Supports three depth levels (quick / medium / deep) and two writing styles (standard / concise) via parameter.
+description: 分析一个软件项目，生成一份结构化的 markdown 报告。报告 outline 根据项目类型（接口库 / 应用 / 框架 / 协议实现 / 研究代码 / Monorepo / 兜底通用）自适应，而不是把所有项目套进同一个模板。通用元素包括「概念与术语」词汇表、README 与代码事实核对、code archaeology 检查、许可证 / 分发审查、以及「客观事实 / 主观评价」二分。接受 GitHub 仓库名（自动搜索并 clone）、本地目录路径、上传的压缩包（.zip / .tar.gz / .tar），或子模块形式 `<repo-or-path>::<subpath>` 用于钻取单个子目录。当用户希望理解、探索、研究或总结一个已有项目、代码库、仓库时调用——即便用户没明确说"分析"。强触发短语包括"了解这个项目"、"看一下这个仓库"、"整理一份项目报告"、"分析 X repo"、"study this repo"、"understand this codebase"，或者直接给出项目名让你写一份说明。报告以简体中文写入 `./reports/<name>_analysis_<depth>.md`，文件名仅含 ASCII；跨平台（Windows PowerShell + *nix bash）。通过参数支持三档深度（quick / medium / deep）和两种写作风格（standard / concise）。
 ---
 
 # Project Analyzer
 
-Produces a structured markdown analysis report of a software project. **The outline is chosen based on what kind of project this is**, not pre-decided by template. An interface library and a CLI application demand fundamentally different framings; this skill picks one of seven presets (or a fallback) so the report's structure serves the project, not the other way around.
+生成一份结构化的项目分析报告。**outline 由项目本身的类型决定**，不是预先定死的模板。一个接口库和一个 CLI 应用所需要的叙述方式根本不同；这个 skill 在七种 preset 中选一种（或走兜底），让报告结构服务于项目，而不是反过来。
 
-## Inputs to collect
+## 需要收集的输入
 
-1. **Source** (required — must ask if missing) — one of:
-   - GitHub repo name (full `owner/repo` or partial like `langchain`)
-   - Local directory path (already on disk)
-   - Path to an uploaded archive (`.zip`, `.tar.gz`, `.tar`)
-   - **Submodule form**: `<repo-or-path>::<subpath>` — analyzes a single subdirectory in the context of its parent repo. Examples: `./.cache/goclaw::internal/pipeline`, `nextlevelbuilder/goclaw::internal/pipeline`. See "Submodule mode" below for behavior differences.
-2. **Depth** (optional, default `medium`): `quick` | `medium` | `deep`
-3. **Style** (optional, default `standard`): `standard` | `concise`
+1. **Source** (必填——缺失必须问) ——以下之一：
+   - GitHub 仓库名（完整的 `owner/repo` 或片段如 `langchain`）
+   - 本地目录路径（已经在磁盘上）
+   - 上传压缩包路径（`.zip` / `.tar.gz` / `.tar`）
+   - **子模块形式**：`<repo-or-path>::<subpath>` ——在母仓库的上下文里分析单个子目录。例：`./.cache/goclaw::internal/pipeline`、`nextlevelbuilder/goclaw::internal/pipeline`。行为差异见下文"子模块模式"。
+2. **Depth** (可选，默认 `medium`)：`quick` | `medium` | `deep`
+3. **Style** (可选，默认 `standard`)：`standard` | `concise`
 
-For Depth / Style: if the user didn't specify, **use the defaults and state them explicitly** before starting ("I'll do a medium-depth standard-style analysis — say so if you want different."). Don't block on confirmation for defaults. Only Source must be confirmed.
+Depth / Style：用户没指定时，**用默认值并显式说明**再开始（"我会按 medium 深度 + standard 风格分析——想换档请打断我。"）。默认值不要阻塞确认。**只有 Source 必须确认**。
 
-## Workflow
+## 工作流程
 
-### Step 1 — Resolve source to a local directory
+### Step 1 — 把 source 解析成本地目录
 
-All clone / extract targets go into **`./.cache/<name>/`** under the current working directory. Create `./.cache/` if it doesn't exist. This keeps the workspace clean across platforms (no `/home/claude`, no `%TEMP%`).
+所有 clone / 解压都放到当前工作目录下的 **`./.cache/<name>/`**。不存在就建。这样跨平台不污染 workspace（不用 `/home/claude`，不用 `%TEMP%`）。
 
-**GitHub repo name:**
-- Use `gh search repos <query>` if the `gh` CLI is available, otherwise use `web_search` with a query like `site:github.com <query>`
-- If multiple plausible matches exist, list the **top 3 by star count** with a one-line description each, and ask the user to pick. Do NOT pick silently.
-- Once confirmed, clone with shallow depth (same command works on bash and PowerShell):
+**GitHub 仓库名：**
+- 优先用 `gh search repos <query>`（如可用），否则用 `web_search`，查询如 `site:github.com <query>`
+- 多个候选时，列出 **star 数前 3** 加一句话描述，让用户选。**不要默选**。
+- 确认后浅 clone（bash 和 PowerShell 通用）：
   ```bash
   git clone --depth 1 https://github.com/<owner>/<repo>.git ./.cache/<repo>
   ```
-- For private repos: ask the user to clone manually and provide the local path.
+- 私有库：让用户手动 clone 后提供本地路径。
 
-**Local directory path:** use as-is.
+**本地目录路径：** 直接用。
 
-**Submodule form (`<repo>::<subpath>`):**
-- Resolve the `<repo>` part first via the rules above (clone / use local path / extract archive).
-- Verify `<subpath>` exists under the resolved repo. If not, ask the user to correct.
-- Carry both the resolved repo root and the subpath forward — the analysis runs against the subpath, but you are allowed to read up to 1–2 levels above for helper / type context (don't go further unless necessary).
+**子模块形式 (`<repo>::<subpath>`)：**
+- 先按上述规则解析 `<repo>` 部分（clone / 本地路径 / 解压）
+- 校验 `<subpath>` 在解析后的仓库下存在；不存在就让用户改正
+- 同时带住"仓库根"和"子路径"——分析在子路径上跑，但允许向上读 1–2 级查 helper / 类型上下文（不必要不再往上）
 
-**Archive:** extract to `./.cache/<archive-basename>/`.
+**压缩包：** 解压到 `./.cache/<archive-basename>/`。
 
 bash:
 ```bash
@@ -57,15 +57,15 @@ PowerShell:
 New-Item -ItemType Directory -Force -Path ./.cache/<basename> | Out-Null
 # zip
 Expand-Archive -Path <archive> -DestinationPath ./.cache/<basename>
-# tar.gz / tar (Win10+ bundles tar)
+# tar.gz / tar (Win10+ 自带 tar)
 tar -xzf <archive> -C ./.cache/<basename>
 ```
 
-### Step 1.5 — Size check & gate
+### Step 1.5 — 体量检查与阈值
 
-Run the LoC count against the **analysis target** — for submodule mode that's the subpath, not the whole repo. Submodule LoC usually stays well under threshold and the gate rarely triggers.
+对**分析目标**统计 LoC——子模块模式下是子路径，不是整个仓库。子模块通常远低于阈值，这个 gate 很少触发。
 
-Use whichever shell is available:
+按可用 shell 选一种：
 
 bash:
 ```bash
@@ -84,7 +84,7 @@ Get-ChildItem -Path <dir> -Recurse -File `
   | Get-Content | Measure-Object -Line
 ```
 
-**If total LoC > 100,000**, pause and warn the user:
+**LoC 超过 100,000** 时暂停并警告：
 
 > "项目体量较大（约 X 万行），按 `<depth>` 档分析会有以下影响：
 > - **token 消耗显著增加**（可能挤占后续对话的上下文）
@@ -98,241 +98,241 @@ Get-ChildItem -Path <dir> -Recurse -File `
 >
 > 你想怎么做？"
 
-Wait for user confirmation before proceeding. Honor the user's choice.
+等用户确认。尊重用户选择。
 
-If LoC ≤ 100,000, proceed silently.
+LoC ≤ 100,000 时静默通过。
 
-### Step 2 — Identify project type
+### Step 2 — 判定项目类型
 
-Before the main analysis, do a fast type pass: read README + top-level structure, then assign the project to one of seven types. **Different types get different outlines and different focus lists** — this is where the redesign earns its keep over a fixed template.
+主分析之前先做一次快速类型识别：读 README + 顶层结构，把项目归到七种类型之一。**不同类型走不同 outline、不同关注点列表**——这是这套设计相对固定模板的核心价值。
 
-**Detection signals** (any 2+ → match; if multiple types match, use the priority order at the bottom):
+**判定信号**（命中 ≥ 2 项视作匹配；多类同时命中按文末优先级）：
 
-| Type | Signals |
+| 类型 | 信号 |
 |---|---|
-| **interface-library** (接口库 / 系统库) | 主要产物是 `.so` / `.a` / crate / wheel / gem，**无 main 二进制**或仅有 demo CLI；README 描述方式是"提供 X / Y / Z 能力"或"封装 syscall X"；公共 API 可独立列出（headers / `pub fn` / `__all__`）；直接依赖某底层机制（syscall、内核子系统、协议帧、设备节点）；测试以 API 调用为主 |
+| **interface-library** (接口库 / 系统库) | 主产物是 `.so` / `.a` / crate / wheel / gem，**无 main 二进制**或仅有 demo CLI；README 描述方式是"提供 X / Y / Z 能力"或"封装 syscall X"；公共 API 可独立列出（headers / `pub fn` / `__all__`）；直接依赖某底层机制（syscall、内核子系统、协议帧、设备节点）；测试以 API 调用为主 |
 | **application** (应用 / 工具) | 顶层有 `main` 入口或显式二进制目标；CLI / daemon / TUI 行为；README 讲使用场景或子命令；issue 多讨论 e2e 行为 |
 | **framework** (框架 / SDK) | 库形态但通过 trait / interface / abstract class 强加架构约束；明确暴露扩展点（middleware / plugin / hook）；用户代码需要"塞进"框架的生命周期 |
-| **protocol** (协议实现) | 引用 RFC / draft 号；存在 wire format / conformance test；命名里含 protocol / spec / codec / wire / frame |
+| **protocol** (协议实现) | 引用 RFC / draft 号；存在 wire format / conformance test；命名含 protocol / spec / codec / wire / frame |
 | **research** (研究代码) | 引用论文 arXiv id / paper.bib；有 `experiments/` / `checkpoints/` / `configs/` 目录；README 主要讲方法和实验结果 |
 | **monorepo** | `packages/` / `apps/` / `crates/` 下有 ≥ 3 个独立可用的子项目；根 README 是聚合性的 |
 | **fallback** (兜底通用) | 以上信号都不够强，或项目混合多种特征难以归类 |
 
-**Priority when multiple match**: interface-library > protocol > framework > research > monorepo > application > fallback.
+**多类同时命中时的优先级**：interface-library > protocol > framework > research > monorepo > application > fallback。
 
-**Hybrid handling**: if a project is genuinely A+B (e.g. CLI tool that's also a library), pick the primary outline and add 1–2 chapters from the secondary preset. State this explicitly in the report header.
+**混合形态处理**：如果项目确实是 A+B（例如 CLI 工具同时也是库），选主类型 outline，加 1–2 个次类型的章节。报告头里显式说明。
 
-**State the inferred type to the user** before continuing (don't pause):
+**把推断出的类型告知用户**再继续（不要阻塞）：
 
 > "看起来这是一个 **<type>** 项目（依据：<一句话理由>），按对应的 outline 来写。如果判定错了请打断我。"
 
-In submodule mode, type detection runs on the **subpath**, not the parent repo — a subdirectory may have a different character than the whole.
+子模块模式下，类型判定跑在**子路径**上，不是母仓库——一个子目录的性格可能跟整体不同。
 
-### Step 3 — Analyze (according to type + depth)
+### Step 3 — 按类型 + 深度分析
 
-Run two things in parallel:
+并行做两件事：
 
-1. **Universal analysis methods** — applied on every project, all depths. See "Universal analysis methods" section.
-2. **Type-specific focus list** — see the relevant preset under "Project type presets".
+1. **通用分析方法**——所有项目、所有深度都做。见"通用分析方法"小节。
+2. **类型专属关注点**——见下方对应 preset。
 
-The depth tier sets intensity, not which dimensions to cover:
+深度档决定强度，不决定覆盖哪些维度：
 
-- `quick` — touch each dimension lightly (read README, top-level structure, list public surface or main entry points, skim 1–2 source files)
-- `medium` — go into the type's primary chapters in real depth; verify README claims against code; surface archaeology signals
-- `deep` — expand every chapter the preset names; trace multiple end-to-end paths or cover every interface group; include ABI / versioning / cross-platform notes where relevant
+- `quick` ——每个维度浅触（读 README、顶层结构、列公共表面或 main 入口，扫 1–2 个源文件）
+- `medium` ——按类型主要章节真正深入；核对 README claim；提取 archaeology signals
+- `deep` ——把 preset 中每个章节都展开；跟踪多条端到端路径或覆盖每个接口分组；涉及 ABI / 版本 / 跨平台的也写
 
-**No TOP-N scoring formula.** Pick which items to expand (which interfaces, modules, paths, extension points) based on what's interesting in *this* project. If you do narrow the focus, name what you skipped so readers don't infer "skipped = unimportant".
+**不做 TOP-N 评分**。挑哪些项展开（接口 / 模块 / 路径 / 扩展点）基于*这个*项目本身有意思的点，不是公式打分。如果做了取舍，**显式列出"未详写的部分"**，避免读者推断"未详写 = 不重要"。
 
-### Step 4 — Generate the report
+### Step 4 — 生成报告
 
-**Output path:**
+**输出路径：**
 
-- Repo analysis: `./reports/<project-name>_analysis_<depth>.md`
-- Submodule analysis: `./reports/<repo>__<subpath-flattened>_analysis_<depth>.md`
-  - `<subpath-flattened>`: replace `/` and `\` with `-` (e.g., `internal/pipeline` → `internal-pipeline`)
-  - Example: `./reports/goclaw__internal-pipeline_analysis_deep.md`
+- 仓库分析：`./reports/<project-name>_analysis_<depth>.md`
+- 子模块分析：`./reports/<repo>__<subpath-flattened>_analysis_<depth>.md`
+  - `<subpath-flattened>`：把 `/` 和 `\` 替换为 `-`（例：`internal/pipeline` → `internal-pipeline`）
+  - 示例：`./reports/goclaw__internal-pipeline_analysis_deep.md`
 
-Create `./reports/` if it doesn't exist.
+不存在就建 `./reports/`。
 
-**Filename rules (ASCII only):**
-- Use ASCII characters only — no CJK / accented / emoji. Non-ASCII paths can break tooling on Windows and in cross-platform pipelines.
-- Sanitize the project name: strip `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`, and any whitespace (replace with `-`).
-- The report **content** is still written in 简体中文 per the style guide; only the filename is ASCII.
+**文件名规则（仅 ASCII）：**
+- 仅用 ASCII 字符——不带 CJK / 重音 / emoji。非 ASCII 路径会在 Windows 和跨平台流水线里出问题。
+- 净化项目名：去掉 `/`、`\`、`:`、`*`、`?`、`"`、`<`、`>`、`|` 和空白（替换成 `-`）。
+- 报告**内容**仍按风格指南写简体中文；只有文件名是 ASCII。
 
-#### Universal sections (always present, in this order)
+#### 通用章节（始终存在，顺序如下）
 
-1. **元数据头** — see "Header" below
-2. **问题域** — what problem does this solve? who's the target user? **what would users have to do without this project?** (反事实陈述是这一节的灵魂)
-3. **概念与术语** — definition-list glossary; see "Universal section: 概念与术语" below
-4. **[type-specific chapters]** — chapters dictated by the preset chosen in Step 2
-5. **协议与分发** — license, commercial use restrictions, distribution model. Usually a short section near the end. Promote to higher position **only** when there's a conflict worth flagging (e.g., "production-ready" claim + non-commercial license)
-6. **特点与不足** — split into:
-   - **客观事实** — observed, verifiable items. README-vs-reality mismatches and code archaeology signals that didn't fit naturally inside other chapters land here.
-   - **主观评价** — Claude's own assessment grounded in those facts. No fluff; tie each opinion to a specific fact above.
+1. **元数据头** ——见下方"Header"
+2. **问题域** ——这个项目解决什么问题？目标用户是谁？**没有它，用户得自己做什么？** （反事实陈述是这一节的灵魂）
+3. **概念与术语** ——定义列表式词汇表；见"通用小节：概念与术语"
+4. **[类型专属章节]** ——按 Step 2 选定的 preset 决定
+5. **协议与分发** ——许可证、商业使用限制、分发模式。一般是靠后的短小一段。**仅当**存在值得前置警告的冲突（例如"production-ready"主张 + 非商用许可）才提到前面
+6. **特点与不足** ——分两小节：
+   - **客观事实** ——可观测、可验证的项。无处安放的 README-vs-reality 不符和 archaeology signals 也落在这里
+   - **主观评价** ——Claude 自己的判断，每条都要能追溯到上面具体的事实。不空话
 
-**Submodule mode dimension overrides:**
-- **协议与分发** collapses to one line: *"继承自母仓库 `<repo>` 的 `<license>`"*. No standalone section unless the submodule has its own LICENSE/NOTICE.
-- **概念与术语** still present, scoped to the subpath.
-- Type detection is run on the subpath, not the parent.
-- Other dimensions stay, scoped to the submodule.
+**子模块模式下的维度覆盖：**
+- **协议与分发**收成一行：*"继承自母仓库 `<repo>` 的 `<license>`"*。除非子模块有自己的 LICENSE / NOTICE，否则不独立成节。
+- **概念与术语**仍保留，scope 限于子路径。
+- 类型判定跑在子路径上，不是母仓库。
+- 其他维度都在，scope 收到子模块。
 
-#### Style guide
+#### 风格指南
 
-**`standard` (default)**
-- Complete sentences, prose-heavy
-- Use markdown headings, tables, fenced code blocks
-- Suitable for sharing with teammates
-- Example: *"The project uses a Channel trait to abstract over transport mechanisms, allowing transports like Unix sockets and TCP to plug in through a uniform interface."*
+**`standard` (默认)**
+- 完整句子、以叙述为主
+- 用 markdown 标题、表格、代码块
+- 适合分享给同事
+- 例：*"项目通过 Channel trait 抽象传输层，使 Unix socket 和 TCP 等传输能以统一接口接入。"*
 
 **`concise` (速记式)**
-- Telegraphic, note-style — drop articles and connecting words
-- Heavy use of `→`, `:`, `/`, bullet fragments
-- Information density over readability for outsiders
-- Example: *"Channel trait → 抽象传输层；transports（unix sock / tcp）统一接入"*
-- Sections still use markdown headers, but bullets dominate over paragraphs
+- 电报式、便签式——删冠词和连接词
+- 大量使用 `→`、`:`、`/`、bullet fragment
+- 信息密度优先于对外可读性
+- 例：*"Channel trait → 抽象传输层；transports（unix sock / tcp）统一接入"*
+- 仍用 markdown 标题，但 bullet 占主导
 
 #### Header
 
-Always start the report with a metadata header:
+报告始终以元数据头开头：
 
 ```markdown
 # <项目名> 分析报告
 
 - **来源**: <github URL / local path / archive>
-- **项目类型**: interface-library | application | framework | protocol | research | monorepo | fallback  <!-- 若为 hybrid，写 "A (主) + B (次)" -->
+- **项目类型**: interface-library | application | framework | protocol | research | monorepo | fallback  <!-- 混合形态写 "A (主) + B (次)" -->
 - **分析深度**: quick | medium | deep
 - **写作风格**: standard | concise
 - **生成日期**: YYYY-MM-DD
 - **commit (if cloned)**: <short SHA>
 ```
 
-### Step 5 — Present the report
+### Step 5 — 呈现报告
 
-After writing the file:
+写完文件后：
 
-1. Print the **absolute path** to the report so the user can open it directly. Resolve the path with whatever the environment provides — `realpath ./reports/<file>` on bash, `Resolve-Path ./reports/<file>` on PowerShell.
-2. In chat, give a 2–3 sentence summary of the headline findings — do **not** restate the whole report.
-3. Tell the user something like: *"已写入 `<absolute path>`，可在编辑器中打开。"*
+1. 打印**绝对路径**让用户能直接打开。用环境提供的方式解析路径——bash 上 `realpath ./reports/<file>`，PowerShell 上 `Resolve-Path ./reports/<file>`。
+2. 在聊天里给 2–3 句关键发现的摘要——**不要**复述整份报告。
+3. 告知用户：*"已写入 `<absolute path>`，可在编辑器中打开。"*
 
-Do not assume any sandbox-only presentation helper exists.
+不要假设存在沙盒专属的呈现 helper。
 
-## Project type presets
+## 项目类型 preset
 
-Each preset specifies the outline chapter order, what each chapter must answer, and the per-depth focus. **Treat the outline as a starting point, not a contract** — drop a chapter if the project genuinely has nothing to say there, or add one if you find something the preset didn't anticipate.
+每个 preset 指定章节顺序、每个章节要回答什么、以及每个深度档的关注点。**把 outline 视作起点而非契约**——某章节项目里实在没什么可写就删掉，发现 preset 未预料到的东西就加章节。
 
 ### Preset: interface-library (接口库 / 系统库)
 
-**Chapter outline** (after universal 元数据头 / 问题域 / 概念与术语):
+**章节大纲**（接在通用的 元数据头 / 问题域 / 概念与术语 之后）：
 
-- **底层基础** — 依赖的 syscall / 内核机制 / 协议；项目把哪些底层细节抽象掉了；和同层级竞品（如有）的关系
-- **接口分类** — 表格 + 简述，按"上下文构造 / 配置 / 状态查询 / 序列化 / 销毁"或项目自身的自然分组列出全部公共 API
-- **接口设计要点** — 命名约定、错误模型、生命周期、线程安全、不透明指针 vs 暴露结构体、可扩展性。每条配 1–2 行代码引用
-- **使用方式** — 一段最小 working 示例 + 真实项目中的典型集成位置（哪些知名项目用它、用在哪一步）
-- 协议与分发 / 特点与不足（universal）
+- **底层基础** ——依赖的 syscall / 内核机制 / 协议；项目把哪些底层细节抽象掉了；与同层级竞品的关系（如有）
+- **接口分类** ——表格 + 简述，按"上下文构造 / 配置 / 状态查询 / 序列化 / 销毁"或项目自身自然分组，列出全部公共 API
+- **接口设计要点** ——命名约定、错误模型、生命周期、线程安全、不透明指针 vs 暴露结构体、可扩展性。每条配 1–2 行代码引用
+- **使用方式** ——一段最小 working 示例 + 真实项目中的典型集成位置（哪些知名项目用它、用在哪一步）
+- 协议与分发 / 特点与不足（通用）
 
-**Per-depth focus**:
-- `quick`: 罗列公共头文件 / pub 接口，分组到一级（如"上下文 / 规则 / 应用"），不深入
-- `medium`: 接口分类填到二级（每个 API 一句话功能，从 source 验证）；选 1–2 个典型 API 读实现，提炼设计取舍；从 examples/ 或 tests/ 摘最小示例
-- `deep`: 每个接口分组成段（覆盖：API 列表 + 典型调用顺序 + 内部如何翻译到底层调用）；错误模型 / 线程安全 / 生命周期完整成段；跨平台 / 多架构差异；ABI / symbol versioning
+**各档关注点**：
+- `quick`：列公共头文件 / pub 接口，分到一级分组（如"上下文 / 规则 / 应用"），不深入
+- `medium`：接口分类填到二级（每个 API 一句话功能，从 source 核对）；选 1–2 个典型 API 读实现，提炼设计取舍；从 examples/ 或 tests/ 摘最小示例
+- `deep`：每个接口分组成段（覆盖：API 列表 + 典型调用顺序 + 内部如何翻译到底层调用）；错误模型 / 线程安全 / 生命周期完整成段；跨平台 / 多架构差异；ABI / symbol versioning
 
 ### Preset: application (应用 / 工具)
 
-**Chapter outline**:
+**章节大纲**：
 
-- **整体架构** — 高层组件图（文字或 mermaid 描述）、进程模型、主要状态机
-- **关键数据流 / 控制流** — 至少一条 e2e 路径（用户输入 → 输出 / 副作用），把途径的组件按顺序串起来；指出哪些是同步、哪些异步、哪些跨进程
-- **实现要点** — 选 2–4 个非平凡的实现细节（关键数据结构、算法、并发模型、IPC / RPC 形式、持久化、调度）
-- **部署与运维** — 怎么部署、配置、监控、升级；纯 CLI 工具时缩为"使用方式"小节
+- **整体架构** ——高层组件图（文字或 mermaid）、进程模型、主要状态机
+- **关键数据流 / 控制流** ——至少一条端到端路径（用户输入 → 输出 / 副作用），按顺序串起途经组件；指出哪些同步、哪些异步、哪些跨进程
+- **实现要点** ——选 2–4 个非平凡的实现细节（关键数据结构、算法、并发模型、IPC / RPC、持久化、调度）
+- **部署与运维** ——怎么部署、配置、监控、升级；纯 CLI 时收缩为"使用方式"小节
 - 协议与分发 / 特点与不足
 
-**Per-depth focus**:
-- `quick`: 入口 → 顶层架构图 → 一条主路径名字层面贯通
-- `medium`: 一条 e2e 路径详写（含关键文件:行号）；2 个实现要点深入
-- `deep`: 多条 e2e 路径；错误处理 / 重试 / 退路；完整部署故事；性能关键路径与 benchmark（如有）
+**各档关注点**：
+- `quick`：入口 → 顶层架构 → 一条主路径名字层面贯通
+- `medium`：一条端到端路径详写（含关键文件:行号）；2 个实现要点深入
+- `deep`：多条端到端路径；错误处理 / 重试 / 退路；完整部署故事；性能关键路径与 benchmark（如有）
 
 ### Preset: framework (框架 / SDK)
 
-**Chapter outline**:
+**章节大纲**：
 
-- **设计哲学** — 核心抽象（最重要的 1–3 个 trait / interface / 概念）；与同类框架（如 axum vs actix、Express vs Fastify）的差异点
-- **扩展点矩阵** — 表格：扩展点 / 形式（trait / hook / middleware / decorator）/ 触发时机 / 典型用途
-- **内部机制** — 框架自己怎么把扩展点串起来、生命周期管理、错误传播、类型推断或反射的代价
-- **典型用法** — minimal "hello world" + 一个非平凡场景（中间件链、自定义提取器之类）
+- **设计哲学** ——核心抽象（最重要的 1–3 个 trait / interface / 概念）；与同类框架（如 axum vs actix、Express vs Fastify）的差异点
+- **扩展点矩阵** ——表格：扩展点 / 形式（trait / hook / middleware / decorator）/ 触发时机 / 典型用途
+- **内部机制** ——框架如何把扩展点串起来、生命周期管理、错误传播、类型推断或反射的代价
+- **典型用法** ——minimal "hello world" + 一个非平凡场景（中间件链、自定义提取器之类）
 - 协议与分发 / 特点与不足
 
-**Per-depth focus**:
-- `quick`: 列出核心抽象 + 扩展点矩阵（一级）
-- `medium`: 设计哲学成段 + 跟踪一个扩展点从声明到调用的完整路径
-- `deep`: 内部机制完整、与同类对比成段、覆盖错误传播 / 生命周期边界 case
+**各档关注点**：
+- `quick`：列核心抽象 + 扩展点矩阵（一级）
+- `medium`：设计哲学成段 + 跟踪一个扩展点从声明到调用的完整路径
+- `deep`：内部机制完整、与同类对比成段、覆盖错误传播 / 生命周期边界 case
 
 ### Preset: protocol (协议实现)
 
-**Chapter outline**:
+**章节大纲**：
 
-- **协议定位** — 在协议栈中的位置、上下游、与同类协议（如有）的关系；引用的 RFC / draft
-- **wire format** — 报文 / 帧 / 包结构、字段含义、版本编码；尽量给一张 ASCII 字段图或字节布局表
-- **实现策略** — 状态机、解析器、序列化策略；手写 parser 还是 codegen；零拷贝 / 内存安全策略
-- **互操作 / 一致性** — 与官方测试套件的覆盖、已知互操作问题
+- **协议定位** ——在协议栈中的位置、上下游、与同类协议的关系（如有）；引用的 RFC / draft
+- **wire format** ——报文 / 帧 / 包结构、字段含义、版本编码；尽量给一张 ASCII 字段图或字节布局表
+- **实现策略** ——状态机、解析器、序列化策略；手写 parser 还是 codegen；零拷贝 / 内存安全策略
+- **互操作 / 一致性** ——与官方测试套件的覆盖、已知互操作问题
 - 协议与分发 / 特点与不足
 
-**Per-depth focus**:
-- `quick`: 协议定位 + wire format 一级骨架
-- `medium`: 完整 wire format + 解析器主路径
-- `deep`: 全部状态转换、错误恢复、互操作矩阵、与参考实现的差异
+**各档关注点**：
+- `quick`：协议定位 + wire format 一级骨架
+- `medium`：完整 wire format + 解析器主路径
+- `deep`：所有状态转换、错误恢复、互操作矩阵、与参考实现的差异
 
 ### Preset: research (研究代码)
 
-**Chapter outline**:
+**章节大纲**：
 
-- **方法** — 论文核心 idea 与代码的映射；指出哪段代码对应论文中哪个公式 / 算法 / 模块
-- **实验配置** — 数据集、超参、硬件假设
-- **复现路径** — 如何从 clone 到跑通；缺失了什么（数据、checkpoint、license）；预估资源
-- **局限** — 已知不工作的场景；论文未声明但代码里能看到的限制
+- **方法** ——论文核心 idea 与代码的映射；指出哪段代码对应论文中哪个公式 / 算法 / 模块
+- **实验配置** ——数据集、超参、硬件假设
+- **复现路径** ——如何从 clone 到跑通；缺失什么（数据、checkpoint、license）；预估资源
+- **局限** ——已知不工作的场景；论文未声明但代码里能看到的限制
 - 协议与分发 / 特点与不足
 
-**Per-depth focus**:
-- `quick`: 方法概要 + 顶层目录映射到论文章节
-- `medium`: 公式 ↔ 代码映射详写；至少一条数据集 → 输出的复现命令
-- `deep`: 实验 reproducibility 全部覆盖；评测脚本逐项核对；与论文报告数字的可信度评估
+**各档关注点**：
+- `quick`：方法概要 + 顶层目录映射到论文章节
+- `medium`：公式 ↔ 代码映射详写；至少一条数据集 → 输出的复现命令
+- `deep`：实验 reproducibility 全部覆盖；评测脚本逐项核对；与论文报告数字的可信度评估
 
 ### Preset: monorepo
 
-**Chapter outline**:
+**章节大纲**：
 
-- **子项目矩阵** — 表格：子项目 / 一句话职责 / LoC / 主要语言 / 对外接口 / 状态（active / archived / experimental）
-- **关键流转** — 子项目之间的数据 / 依赖流（哪个产出被哪个消费）；如果是 trunk + plugins 模式，说清 trunk 是哪个
-- **共享基础设施** — build / lint / CI / 共享库 / 发布流程
-- **下钻建议** — 这个 monorepo 哪些子项目最适合用 `<repo>::<sub>` 单独分析
+- **子项目矩阵** ——表格：子项目 / 一句话职责 / LoC / 主要语言 / 对外接口 / 状态（active / archived / experimental）
+- **关键流转** ——子项目之间的数据 / 依赖流（哪个产出被哪个消费）；trunk + plugins 模式时说清 trunk 是哪个
+- **共享基础设施** ——build / lint / CI / 共享库 / 发布流程
+- **下钻建议** ——这个 monorepo 哪些子项目最适合用 `<repo>::<sub>` 单独分析
 - 协议与分发 / 特点与不足
 
-**Per-depth focus**:
-- `quick`: 子项目矩阵 + 一句话流转关系
-- `medium`: 流转成段 + 共享基础设施实地核对
-- `deep`: 每个子项目一段简评 + 给出 2–3 条具体的 submodule 下钻路径
+**各档关注点**：
+- `quick`：子项目矩阵 + 一句话流转关系
+- `medium`：流转成段 + 共享基础设施实地核对
+- `deep`：每个子项目一段简评 + 给出 2–3 条具体的 submodule 下钻路径
 
 ### Preset: fallback (兜底)
 
-Use when type detection isn't confident, or the project legitimately doesn't fit elsewhere. This is the old single-template approach, kept as a safety net.
+类型识别不自信、或项目确实不归属任一类型时走这套。这是原本的单一模板，作为安全网保留。
 
-**Chapter outline**:
+**章节大纲**：
 
-- **设计思路** — 核心抽象、设计哲学、关键架构决策
-- **代码组织** — 模块清单表（name / 一句话职责 / LoC / 关键入口文件），全量列出。**不做 TOP-N 评分**；如果模块多，选 3–5 个用粗体段落详写，并显式列出"未详写模块"。
+- **设计思路** ——核心抽象、设计哲学、关键架构决策
+- **代码组织** ——模块清单表（名 / 一句话职责 / LoC / 关键入口文件），列全。**不做 TOP-N 评分**；模块多时选 3–5 个粗体段落详写，并显式列出"未详写模块"。
 - 协议与分发 / 特点与不足
 
-## Universal section: 概念与术语
+## 通用小节：概念与术语
 
-读后续章节前的词汇表。两类内容都收：
-- **外部概念**: 项目依赖但外部存在的技术（syscall、BPF、OCI spec、cgroup、SPI 等）
-- **本项目引入的抽象**: 项目自己造的词或赋予特定含义的类型（filter context、extractor、channel、layer 等）
+读后续章节前的词汇表。两类都收：
+- **外部概念**：项目依赖但外部存在的技术（syscall、BPF、OCI spec、cgroup、SPI 等）
+- **本项目引入的抽象**：项目自己造的词或赋予特定含义的类型（filter context、extractor、channel、layer 等）
 
-**收录规则**:
+**收录规则**：
 - 3–8 条，硬上限 10。多了就成词典了
 - 只收"报告读者可能不知道 / 在本项目中有特定含义"的项
 - **不收**通用 CS 概念（function / module / branch / trait / class 等）
-- 每条 2–3 行：是什么 + 为什么这么设计 / 非显然之处，再加一行"在本项目中"指明它出现的位置和角色
+- 每条 2–3 行：是什么 + 为什么这么设计 / 非显然之处，再加一行"在本项目中"指明位置和角色
 
-**格式（定义列表式，不是表格——密度高的内容塞不进表格单元格）**:
+**格式（定义列表式，不是表格——密度高的内容塞不进表格单元格）**：
 
 ```markdown
 ## 概念与术语
@@ -345,7 +345,7 @@ Use when type detection isn't confident, or the project legitimately doesn't fit
 ...
 ```
 
-**示例（节选自 libseccomp）**:
+**示例（节选自 libseccomp）**：
 
 ```markdown
 **seccomp-bpf** *(外部)*
@@ -357,29 +357,29 @@ Linux 内核 ≥3.5 提供的 syscall 过滤机制：进程一次性向内核安
 → 几乎所有公共 API 的第一参数；生命周期：`init → arch_add* → rule_add* → load → release`。
 ```
 
-## Universal analysis methods
+## 通用分析方法
 
-These run on every project regardless of type, at every depth (depth controls intensity, not whether to do them).
+不论项目类型和深度档都做（深度档控制强度，不控制做不做）。
 
-### README-vs-reality check
+### README 与代码事实核对
 
-For each verifiable claim in README / 顶层 docs，**到代码里核对**：
-- 数字型 claim（"8-stage pipeline"、"20+ providers"、"5-layer security"）— 数一数代码里实际有几个
-- 列表型 claim（功能 / 平台 / 兼容版本）— 一项一项找代码证据
-- 性能型 claim（"10x faster"、"zero allocation"）— 找 benchmark 或 micro-optimization；找不到就标"未独立验证"
-- 状态型 claim（"production-ready"、"battle-tested"）— 看测试覆盖、CI 配置、issue 历史
+对 README / 顶层 docs 里每个可验证的 claim，**到代码里核对**：
+- 数字型 claim（"8-stage pipeline"、"20+ providers"、"5-layer security"）——数代码里实际有几个
+- 列表型 claim（功能 / 平台 / 兼容版本）——一项一项找代码证据
+- 性能型 claim（"10x faster"、"zero allocation"）——找 benchmark 或 micro-optimization；找不到就标"未独立验证"
+- 状态型 claim（"production-ready"、"battle-tested"）——看测试覆盖、CI 配置、issue 历史
 
-发现不符时，把它写进对应的正文章节（接口章节里发现接口数量不符 → 写在接口分类里），而不是单独堆到"特点与不足"。**只有**找不到合适章节安放的，才放进"特点与不足 → 客观事实"。
+发现不符时，把它写进对应的正文章节（接口数量不符 → 写在接口分类里），而不是单独堆到"特点与不足"。**只有**找不到合适章节安放的，才放进"特点与不足 → 客观事实"。
 
-为什么这重要：很多用户从 README 了解项目，从不读代码；surfacing 这种 gap 是本 skill 最高价值的产出之一。
+为什么重要：很多用户从 README 了解项目、从不读代码；揭示这种 gap 是本 skill 最高价值的产出之一。
 
 ### Code archaeology signals
 
-观察 meta-signals — 它们往往比代码本身更能说明项目的开发背景、质量和风险。
+观察 meta-signals——它们往往比代码本身更能说明项目的开发背景、质量和风险。
 
 | Signal | 看什么 | 可能含义 |
 |---|---|---|
-| **Translation comments** | `// Adapted from <other-project>`, `// Matching TS <thing>`, `// Port of <X>` | 从另一种语言移植；idiom 可能不本土；质量取决于移植者水平 |
+| **Translation comments** | `// Adapted from <other-project>`、`// Matching TS <thing>`、`// Port of <X>` | 从另一语言移植；idiom 可能不本土；质量取决于移植者水平 |
 | **Idiom mismatch** | Go 里 `MemoryMB int` 而不是 `time.Duration`；语言有 `Option` 却手写 nullable 模式 | AI 辅助移植或非母语作者；fork 后改造成本 |
 | **Aggressive version pins** | 语言 / 运行时 / DB 锁在最新或预发布版本 | 优先尝鲜，部署阻力；企业落地难 |
 | **Scale vs attribution mismatch** | 200k+ LoC 但只有单作者或"X Contributors"泛指 | 重度 AI 辅助 / 影子团队 / 历史合并；质量在不同模块间差距大 |
@@ -389,13 +389,13 @@ For each verifiable claim in README / 顶层 docs，**到代码里核对**：
 | **Test/code organization** | 分层测试（contracts / integration / invariants / scenarios）vs 一个 `tests/` 堆 | 结构化测试 → 工程成熟度信号 |
 | **Commit cadence and authorship** | 长时间空档、单作者爆发、AI 风格 commit message | 可持续性信号 |
 
-发现这些信号时，按以下原则落地：
-- 信号本身（"BPF 编译器是手写 C"） → "客观事实"
-- 它意味着什么（"维护成本高，但 zero 第三方依赖"） → "主观评价"
+发现这些信号时按以下原则落地：
+- 信号本身（"BPF 编译器是手写 C"）→ "客观事实"
+- 它意味着什么（"维护成本高，但 zero 第三方依赖"）→ "主观评价"
 
 ### 概念抽取
 
-读 README 和顶层结构时同步收集候选术语，按"概念与术语"的收录规则筛选。优先收：项目反复出现的大写类型名、README 中加粗或代码 fence 起来的名词、依赖列表中需要解释才能让读者理解为什么需要它的库。
+读 README 和顶层结构时同步收集候选术语，按"概念与术语"收录规则筛选。优先收：项目反复出现的大写类型名、README 中加粗或代码 fence 起来的名词、依赖列表中需要解释才能让读者理解为什么需要它的库。
 
 ## 输出示例
 
@@ -465,11 +465,11 @@ libseccomp 完全构建在 seccomp-bpf 之上，自身不引入任何额外的�
 
 ## 接口设计要点
 
-- **不透明句柄**: `scmp_filter_ctx` 被 typedef 到 `void *`，调用方拿到也无法访问字段——版本演进时内部结构可任意改。代价是 debugger 里看不到内容，需要 `seccomp_export_pfc` 转储。
-- **错误模型**: 公共 API 返回 `int`，0 成功，负值是 `-errno`。没有全局 errno 污染；但用户需要记得取反才能传给 `strerror()`。
-- **生命周期**: 单写多读语义——`seccomp_load` 后 context 进入只读阶段，再调写操作返回 `-EBUSY`。
-- **线程安全**: 单个 context 不是线程安全的（写操作需要外部加锁）；但加载后的 filter 自然作用于整个进程的所有线程。
-- **跨架构**: 同一份规则可以同时编译到 x86_64 + arm64 + i386，`seccomp_arch_add` 增加目标架构后规则会被多次实例化。
+- **不透明句柄**：`scmp_filter_ctx` 被 typedef 到 `void *`，调用方拿到也无法访问字段——版本演进时内部结构可任意改。代价是 debugger 里看不到内容，需要 `seccomp_export_pfc` 转储。
+- **错误模型**：公共 API 返回 `int`，0 成功，负值是 `-errno`。没有全局 errno 污染；但用户需要记得取反才能传给 `strerror()`。
+- **生命周期**：单写多读语义——`seccomp_load` 后 context 进入只读阶段，再调写操作返回 `-EBUSY`。
+- **线程安全**：单个 context 不是线程安全的（写操作需要外部加锁）；但加载后的 filter 自然作用于整个进程的所有线程。
+- **跨架构**：同一份规则可以同时编译到 x86_64 + arm64 + i386，`seccomp_arch_add` 增加目标架构后规则会被多次实例化。
 
 ## 使用方式
 
@@ -484,9 +484,9 @@ seccomp_release(ctx);
 \`\`\`
 
 典型集成位置：
-- **runc/crun**: 在 init 阶段（容器命名空间已建立、exec 用户进程之前）从 `config.json` 的 seccomp profile 加载规则
-- **systemd**: 在 unit 启动时通过 `SystemCallFilter=` 配置项，systemd 内部调用 libseccomp 构建规则
-- **Bubblewrap / Flatpak**: 在 sandbox 启动器中加载预设策略
+- **runc/crun**：在 init 阶段（容器命名空间已建立、exec 用户进程之前）从 `config.json` 的 seccomp profile 加载规则
+- **systemd**：在 unit 启动时通过 `SystemCallFilter=` 配置项，systemd 内部调用 libseccomp 构建规则
+- **Bubblewrap / Flatpak**：在 sandbox 启动器中加载预设策略
 
 ## 协议与分发
 
@@ -518,7 +518,7 @@ LGPL-2.1（不是 GPL）。允许链接到闭源程序（动态或静态链接�
 
 ---
 
-- If a project is too large to fully analyze at the requested depth, write the report anyway and note in the header which areas were sampled vs fully covered.
-- If the source resolves to multiple top-level directories (and not detected as monorepo), ask the user whether to analyze the whole repo or a specific subproject.
-- If the user provides a name that returns no GitHub matches, ask whether they meant something else or want to provide a URL/path directly.
-- Don't fabricate. If you couldn't determine something (e.g., performance characteristics without benchmarks), say so explicitly in the report.
+- 项目过大无法在请求深度下完整分析时，仍然出报告，但在元数据头里注明哪些区域是抽样、哪些是完整覆盖。
+- source 解析到多个顶层目录但未被判定为 monorepo 时，问用户是分析整个 repo 还是某个子项目。
+- 用户给的名字在 GitHub 搜索无结果时，问是否拼写有误，或是否直接提供 URL / 本地路径。
+- 不编。无法判断的就在报告里明说（例如"无 benchmark，性能特性不做断言"）。
