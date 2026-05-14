@@ -1,6 +1,6 @@
 ---
 name: project-analyzer
-description: 分析一个软件项目，生成一份结构化的 markdown 报告。报告 outline 根据项目类型（接口库 / 应用 / 框架 / 协议实现 / 研究代码 / Monorepo / 兜底通用）自适应，而不是把所有项目套进同一个模板。通用元素包括「概念与术语」词汇表、README 与代码事实核对、code archaeology 检查、许可证 / 分发审查、以及「客观事实 / 主观评价」二分。接受 GitHub 仓库名（自动搜索并 clone）、本地目录路径、上传的压缩包（.zip / .tar.gz / .tar），或子模块形式 `<repo-or-path>::<subpath>` 用于钻取单个子目录。当用户希望理解、探索、研究或总结一个已有项目、代码库、仓库时调用——即便用户没明确说"分析"。强触发短语包括"了解这个项目"、"看一下这个仓库"、"整理一份项目报告"、"分析 X repo"、"study this repo"、"understand this codebase"，或者直接给出项目名让你写一份说明。报告以简体中文写入 `./reports/<name>_analysis_<depth>.md`，文件名仅含 ASCII；跨平台（Windows PowerShell + *nix bash）。通过参数支持三档深度（quick / medium / deep）和两种写作风格（standard / concise）。
+description: 分析一个软件项目并生成一份结构化的 markdown 报告。当用户希望理解、探索、研究或总结一个已有项目、代码库或仓库时调用——即便用户没明确说"分析"。强触发短语包括"了解这个项目"、"看一下这个仓库"、"整理一份项目报告"、"分析 X repo"、"study this repo"、"understand this codebase"，或者直接给出项目名让你写一份说明。
 ---
 
 # Project Analyzer
